@@ -1,0 +1,85 @@
+---
+# This playbook installs webmin on port 59153
+
+ - hosts: all
+   become: true
+   become_user: root
+
+   tasks:   
+   - name: Download setup-repos.sh
+     ansible.builtin.get_url:
+       url: https://raw.githubusercontent.com/webmin/webmin/master/setup-repos.sh
+       dest: /tmp/setup-repos.sh
+       mode: '0644'
+
+   - name: Execute a script on the remote node
+     ansible.builtin.shell:
+       cmd: sudo echo y | sh setup-repos.sh >> output.log       
+       chdir: /tmp
+
+   - name: Install Webmin Rocky or RHEL
+     ansible.builtin.dnf:
+       name: webmin
+       state: present
+     when: ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+   - name: Install Webmin Ubuntu
+     ansible.builtin.apt:
+       name: webmin
+       state: present       
+     when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+   - name: Ansible replace port string with 59153
+     ansible.builtin.replace:
+       path: /etc/webmin/miniserv.conf
+       regexp: 'port=10000'
+       replace: 'port=59153'
+
+   - name: Reload service webmin, in all cases
+     ansible.builtin.service:
+       name: webmin
+       state: reloaded
+
+   - name: Open port 59153 on the firewall
+     ansible.posix.firewalld:
+       state: "{{ item.state }}"
+       port: "{{ item.port }}"
+       zone: public
+       immediate: true
+       permanent: true
+     when: ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+     loop:
+       - { state: 'enabled', port: '59153/tcp' }  
+  
+   - name: reload service firewalld
+     ansible.builtin.service:
+       name: firewalld
+       state: reloaded
+     when: ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+   - name: Install UFW firewall
+     ansible.builtin.apt:
+       name: ufw 
+       update_cache: true
+       state: latest
+     when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+   - name: Enable UFW
+     community.general.ufw:
+       state: enabled
+     when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+   - name: Allow all access to tcp ports
+     community.general.ufw:
+       rule: allow
+       proto: tcp
+       port: '{{ item }}'
+     when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+     
+     loop:
+       - 22
+       - 59153
+       - 443
+       - 80
+...

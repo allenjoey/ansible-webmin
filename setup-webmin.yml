@@ -5,6 +5,12 @@
    become: true
    become_user: root
 
+   handlers:   
+   - name: Reload service webmin
+     ansible.builtin.service:
+       name: webmin
+       state: reloaded
+
    tasks:   
    - name: Download setup-repos.sh
      ansible.builtin.get_url:
@@ -34,12 +40,8 @@
        path: /etc/webmin/miniserv.conf
        regexp: 'port=10000'
        replace: 'port=59153'
-
-   - name: Reload service webmin, in all cases
-     ansible.builtin.service:
-       name: webmin
-       state: reloaded
-
+     notify:  Reload service webmin
+    
    - name: Open port 59153 on the firewall
      ansible.posix.firewalld:
        state: "{{ item.state }}"
